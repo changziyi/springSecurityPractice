@@ -1,0 +1,132 @@
+<beans:beans
+	xmlns="http://www.springframework.org/schema/security"
+	xmlns:beans="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/security
+        http://www.springframework.org/schema/security/spring-security.xsd">
+
+	<!-- 靜態資源不需要控制權限 -->
+	<http pattern="/static/**" security="none" />
+
+	<!-- official : You can have multiple <authentication-provider> elements 
+		to define different authentication sources and each will be consulted in 
+		turn. -->
+	<!-- ___________________________________________________ custom filter___________________________________________ -->
+	<!-- Normally the AuthenticationEntryPoint used will be set depending on 
+		which authentication mechanisms have been configured. This attribute allows 
+		this behaviour to be overridden by defining a customized AuthenticationEntryPoint 
+		bean which will start the authentication process. ___________________________________________________ 
+		只用授權功能而不用認證功能 ___________________________________________________ entry-point-ref="http403ForbiddenEntryPoint" -->
+	<!-- If you use an <http> element within your application, a FilterChainProxy 
+		bean named "springSecurityFilterChain" is created and the configuration within 
+		the element is used to build a filter chain within FilterChainProxy. -->
+	<!-- official http pattern: Defining a pattern for the http element controls 
+		the requests which will be filtered through the list of filters which it 
+		defines. The interpretation is dependent on the configured request-matcher. 
+		If no pattern is defined, all requests will be matched, so the most specific 
+		patterns should be declared first. i think: 放在http中的pattern指定經過filte chain的請求， 
+		而intercept-url則是指定請求的處理方式 -->
+	<!-- official: All filters which require a reference to the AuthenticationManager 
+		will be automatically injected with the internal instance created by the 
+		namespace configuration. i think:但我再這裡自己設定要我自訂的authenticationManager -->
+	<http pattern="/" auto-config="true" use-expressions="false"
+		authentication-manager-ref="authenticationManager">
+		<custom-filter position="PRE_AUTH_FILTER"
+			ref="preAuthFilter" />
+		<form-login
+			authentication-success-handler-ref="cookieTokenAwareAuthenticationSuccessHandler"
+			login-page="/login.jsp" authentication-failure-url="/login.jsp?error" />
+		<logout invalidate-session="true"
+			success-handler-ref="cookieTokenClearingLogoutSuccessHandler"
+			logout-url="/login.jsp" />
+	</http>
+	<!-- i think: 如果使用spring預設的authenticate-manager provider，登入後ProviderManager會把密碼從快取清掉 -->
+	<!-- i think: 這樣子就沒辦法寫道cookie了 -->
+	<http auto-config="true" use-expressions="false"
+		authentication-manager-ref="authenticationManager">
+
+		<!-- 登錄頁面不需要控制權限 -->
+		<intercept-url pattern="/login.jsp"
+			access="IS_AUTHENTICATED_ANONYMOUSLY" />
+		<!-- 訪問其他所有頁面都需要有USER權限 -->
+		<intercept-url pattern="/**" access="ROLE_USER" />
+		<!-- 配置登錄頁面地址login-page、登錄失敗後的跳轉地址authentication-failure-url -->
+		<form-login
+			authentication-success-handler-ref="cookieTokenAwareAuthenticationSuccessHandler"
+			login-page="/login.jsp" authentication-failure-url="/login.jsp?error" />
+		<logout invalidate-session="true"
+			success-handler-ref="cookieTokenClearingLogoutSuccessHandler"
+			logout-url="/login.jsp" />
+		<!-- <remember-me token-validity-seconds="30" /> -->
+	</http>
+
+	<beans:bean
+		id="cookieTokenAwareAuthenticationSuccessHandler"
+		class="mySample1.CookieTokenAwareAuthenticationSuccessHandler">
+		<!-- i think: ____________屬性內容從SimpleUrlAuthenticationSuccessHandler繼承的AbstractAuthenticationTargetUrlRequestHandler來____________ -->
+		<!-- i think: login logout都會繼承AbstractAuthenticationTargetUrlRequestHandler，並呼叫handle方法 -->
+		<beans:property name="defaultTargetUrl"
+			value="/index.jsp" />
+		<beans:property name="alwaysUseDefaultTargetUrl"
+			value="true" />
+	</beans:bean>
+
+	<beans:bean id="cookieTokenClearingLogoutSuccessHandler"
+		class="mySample1.CookieTokenClearingLogoutSuccessHandler">
+		<!-- i think:____________屬性內容從SimpleUrlLogoutSuccessHandler繼承的AbstractAuthenticationTargetUrlRequestHandler來____________ -->
+		<!-- i think: login logout都會繼承AbstractAuthenticationTargetUrlRequestHandler，並呼叫handle方法 -->
+		<beans:property name="defaultTargetUrl"
+			value="/login.action" />
+		<beans:property name="alwaysUseDefaultTargetUrl"
+			value="true" />
+	</beans:bean>
+
+	<beans:bean id="http403ForbiddenEntryPoint"
+		class="org.springframework.security.web.authentication.Http403ForbiddenEntryPoint" />
+
+	<beans:bean id="preAuthFilter"
+		class="mySample1.PreAuthFilter">
+		<beans:property name="authenticationManager"
+			ref="authenticationManager" />
+	</beans:bean>
+	<!--___________________________________________________i think:照順序往下找到適配的驗證方式___________________________________________________ -->
+	<authentication-manager
+		alias="authenticationManager">
+		<authentication-provider ref="preAuthProvider" />
+		<authentication-provider
+			user-service-ref="userDetailsService">
+			<password-encoder ref="passwordEncoder">
+			</password-encoder>
+		</authentication-provider>
+	<!-- <authentication-provider> -->
+	<!-- <user-service> -->
+	<!-- <user name="admin" password="123456" -->
+	<!-- authorities="ROLE_USER, ROLE_ADMIN" /> -->
+	<!-- <user name="benny" password="123456" authorities="ROLE_USER" /> -->
+	<!-- </user-service> -->
+	<!-- </authentication-provider> -->
+	</authentication-manager>
+
+	<beans:bean id="passwordEncoder"
+		class="org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder">
+		<beans:constructor-arg value="11" />
+	</beans:bean>
+
+	<beans:bean id="preAuthProvider"
+		class="org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationProvider">
+		<beans:property
+			name="preAuthenticatedUserDetailsService">
+			<beans:bean id="userDetailsServiceWrapper"
+				class="org.springframework.security.core.userdetails.UserDetailsByNameServiceWrapper">
+				<beans:property name="userDetailsService"
+					ref="userDetailsService" />
+			</beans:bean>
+		</beans:property>
+	</beans:bean>
+
+	<beans:bean id="userDetailsService"
+		class="mySample1.UserDetailService" />
+
+</beans:beans>

@@ -1,0 +1,5 @@
+1. basic xml config set up with custom login page
+2.implement authentication provider JDBC
+3.implement userDetailInterface
+custom filter
+session control
